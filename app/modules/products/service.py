@@ -27,8 +27,7 @@ class ProductService:
         return self.product_repo.get_by_id(product_id)
 
     def create(self, product_in: ProductCreate) -> Product:
-        if product_in.stock == 0:
-            product_in.state = ProductState.NO_STOCK
+        product_in.state = self._resolve_state(product_in.stock, product_in.state)
 
         product = self.product_repo.create(product_in)
         self.event_repo.create(
@@ -45,8 +44,12 @@ class ProductService:
 
         old_state = product.state
 
-        if product_in.stock is not None and product_in.stock == 0:
-            product_in.state = ProductState.NO_STOCK
+        new_stock = product_in.stock if product_in.stock is not None else product.stock
+        requested_state = product_in.state if product_in.state is not None else product.state
+        resolved_state = self._resolve_state(new_stock, requested_state)
+
+        if resolved_state != requested_state:
+            product_in.state = resolved_state
 
         updated = self.product_repo.update(product, product_in)
 
@@ -65,6 +68,15 @@ class ProductService:
             description=product_in.model_dump_json(exclude_unset=True),
         )
         return updated
+
+    def _resolve_state(
+        self, stock: int, state: ProductState
+    ) -> ProductState:
+        if stock == 0:
+            return ProductState.NO_STOCK
+        if state == ProductState.NO_STOCK and stock > 0:
+            return ProductState.ACTIVE
+        return state
 
     def delete(self, product_id: int) -> None:
         product = self.product_repo.get_by_id(product_id)
