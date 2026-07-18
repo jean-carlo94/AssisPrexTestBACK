@@ -1,7 +1,6 @@
-from typing import Sequence
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from fastapi import APIRouter, Depends, HTTPException, status
-
+from app.core.pagination import PaginatedResponse
 from app.modules.events.deps import get_event_service
 from app.modules.events.schema import EventResponse
 from app.modules.events.service import EventService
@@ -9,13 +8,13 @@ from app.modules.events.service import EventService
 router = APIRouter(tags=["events"])
 
 
-@router.get("/events/", response_model=list[EventResponse])
+@router.get("/events/", response_model=PaginatedResponse[EventResponse])
 def list_events(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
     service: EventService = Depends(get_event_service),
-) -> Sequence[EventResponse]:
-    return service.get_all(skip=skip, limit=limit)
+) -> PaginatedResponse[EventResponse]:
+    return service.get_all(page=page, size=size)
 
 
 @router.get("/events/{event_id}", response_model=EventResponse)
@@ -29,11 +28,11 @@ def retrieve_event(
     return event
 
 
-@router.get("/products/{product_id}/events/", response_model=list[EventResponse])
+@router.get("/products/{product_id}/events/", response_model=PaginatedResponse[EventResponse])
 def list_product_events(
     product_id: int,
-    skip: int = 0,
-    limit: int = 100,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
     service: EventService = Depends(get_event_service),
-) -> Sequence[EventResponse]:
-    return service.get_by_product(product_id, skip=skip, limit=limit)
+) -> PaginatedResponse[EventResponse]:
+    return service.get_by_product(product_id, page=page, size=size)

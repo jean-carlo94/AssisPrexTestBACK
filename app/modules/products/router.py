@@ -1,7 +1,6 @@
-from typing import Sequence
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from fastapi import APIRouter, Depends, HTTPException, status
-
+from app.core.pagination import PaginatedResponse
 from app.modules.products.deps import get_product_service
 from app.modules.products.schema import ProductCreate, ProductResponse, ProductUpdate
 from app.modules.products.service import ProductService
@@ -9,13 +8,13 @@ from app.modules.products.service import ProductService
 router = APIRouter(prefix="/products", tags=["products"])
 
 
-@router.get("/", response_model=list[ProductResponse])
+@router.get("/", response_model=PaginatedResponse[ProductResponse])
 def list_products(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
     service: ProductService = Depends(get_product_service),
-) -> Sequence[ProductResponse]:
-    return service.get_all(skip=skip, limit=limit)
+) -> PaginatedResponse[ProductResponse]:
+    return service.get_all(page=page, size=size)
 
 
 @router.get("/{product_id}", response_model=ProductResponse)

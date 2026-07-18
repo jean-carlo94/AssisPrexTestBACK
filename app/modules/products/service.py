@@ -1,6 +1,6 @@
 import json
-from typing import Sequence
 
+from app.core.pagination import PaginatedResult
 from app.modules.events.enums import ActionType
 from app.modules.events.repository import EventRepository
 from app.modules.products.model import Product
@@ -17,8 +17,10 @@ class ProductService:
         self.product_repo = product_repo
         self.event_repo = event_repo
 
-    def get_all(self, skip: int = 0, limit: int = 100) -> Sequence[Product]:
-        return self.product_repo.get_all(skip=skip, limit=limit)
+    def get_all(self, page: int = 1, size: int = 20) -> PaginatedResult[Product]:
+        skip = (page - 1) * size
+        items, total = self.product_repo.get_all(skip=skip, limit=size)
+        return PaginatedResult.of(list(items), total, page, size)
 
     def get_by_id(self, product_id: int) -> Product | None:
         return self.product_repo.get_by_id(product_id)

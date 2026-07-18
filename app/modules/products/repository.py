@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.products.model import Product
@@ -11,10 +11,12 @@ class ProductRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_all(self, skip: int = 0, limit: int = 100) -> Sequence[Product]:
-        return self.db.scalars(
+    def get_all(self, skip: int = 0, limit: int = 100) -> tuple[Sequence[Product], int]:
+        total = self.db.scalar(select(func.count()).select_from(Product))
+        items = self.db.scalars(
             select(Product).offset(skip).limit(limit)
         ).all()
+        return items, total
 
     def get_by_id(self, product_id: int) -> Product | None:
         return self.db.get(Product, product_id)
