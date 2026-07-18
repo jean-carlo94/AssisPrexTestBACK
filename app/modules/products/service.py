@@ -1,40 +1,69 @@
+import json
 from typing import Sequence
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
+from app.modules.events.enums import ActionType
+from app.modules.events.repository import EventRepository
 from app.modules.products.model import Product
+from app.modules.products.repository import ProductRepository
 from app.modules.products.schema import ProductCreate, ProductUpdate
 
 
-def get_product(db: Session, product_id: int) -> Product | None:
-    return db.get(Product, product_id)
+class ProductService:
+    def __init__(
+        self,
+        product_repo: ProductRepository,
+        event_repo: EventRepository,
+    ):
+        self.product_repo = product_repo
+        self.event_repo = event_repo
 
+    def get_all(self, skip: int = 0, limit: int = 100) -> Sequence[Product]:
+        return self.product_repo.get_all(skip=skip, limit=limit)
 
-def get_products(db: Session, skip: int = 0, limit: int = 100) -> Sequence[Product]:
-    return db.scalars(select(Product).offset(skip).limit(limit)).all()
+    def get_by_id(self, product_id: int) -> Product | None:
+        return self.product_repo.get_by_id(product_id)
 
+    def create(self, product_in: ProductCreate) -> Product:
+        product = self.product_repo.create(product_in)
+        self.event_repo.create(
+            product_id=product.id,
+            action=ActionType.CREATE,
+            description=product_in.model_dump_json(),
+        )
+        return product
 
-def create_product(db: Session, product_in: ProductCreate) -> Product:
-    product = Product(**product_in.model_dump())
-    db.add(product)
-    db.commit()
-    db.refresh(product)
-    return product
+    def update(self, product_id: int, product_in: ProductUpdate) -> Product:
+        product = self.product_repo.get_by_id(product_id)
+        if not product:
+            raise ValueError("Producto no encontrado")
 
+        old_state = product.state
+        updated = self.product_repo.update(product, product_in)
 
-def update_product(
-    db: Session, product: Product, product_in: ProductUpdate
-) -> Product:
-    update_data = product_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(product, field, value)
-    db.add(product)
-    db.commit()
-    db.refresh(product)
-    return product
+        if product_in.state is not None and product_in.state != old_state:
+            self.event_repo.create(
+                product_id=updated.id,
+                action=ActionType.STATUS_CHANGED,
+                description=json.dumps(
+                    {"old_state": old_state, "new_state": product_in.state}
+                ),
+            )
 
+        self.event_repo.create(
+            product_id=updated.id,
+            action=ActionType.UPDATE,
+            description=product_in.model_dump_json(exclude_unset=True),
+        )
+        return updated
 
-def delete_product(db: Session, product: Product) -> None:
-    db.delete(product)
-    db.commit()
+    def delete(self, product_id: int) -> None:
+        product = self.product_repo.get_by_id(product_id)
+        if not product:
+            raise ValueError("Producto no encontrado")
+
+        self.event_repo.create(
+            product_id=product.id,
+            action=ActionType.DELETE,
+            description=json.dumps({"id": product.id, "name": product.name}),
+        )
+        self.product_repo.delete(product)

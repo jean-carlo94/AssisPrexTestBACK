@@ -12,11 +12,16 @@ AssisPrexTest/
 │   │   ├── config.py            # Configuración con pydantic-settings
 │   │   └── database.py          # Engine, session, Base y get_db
 │   ├── modules/
-│   │   └── products/
-│   │       ├── model.py         # Modelo SQLAlchemy (Product)
-│   │       ├── schema.py        # Schemas Pydantic (CRUD + response)
-│   │       ├── service.py       # Lógica de negocio
-│   │       └── router.py        # Endpoints REST
+│   │   ├── products/
+│   │   │   ├── model.py         # Modelo SQLAlchemy (Product)
+│   │   │   ├── schema.py        # Schemas Pydantic (CRUD + response)
+│   │   │   ├── service.py       # Lógica de negocio
+│   │   │   └── router.py        # Endpoints REST
+│   │   └── events/
+│   │       ├── model.py         # Modelo SQLAlchemy (Event)
+│   │       ├── schema.py        # Schema Pydantic (EventResponse)
+│   │       ├── service.py       # Registro y consulta de eventos
+│   │       └── router.py        # Endpoints REST (solo lectura)
 │   └── api/v1/
 │       └── api.py               # Router principal v1
 ├── docker-compose.yml
@@ -34,15 +39,30 @@ AssisPrexTest/
 
 ## Endpoints
 
+### Productos
+
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `GET` | `/` | Mensaje de bienvenida |
-| `GET` | `/health` | Health check |
 | `GET` | `/api/v1/products/` | Listar productos |
 | `GET` | `/api/v1/products/{id}` | Obtener producto |
 | `POST` | `/api/v1/products/` | Crear producto |
 | `PUT` | `/api/v1/products/{id}` | Actualizar producto |
 | `DELETE` | `/api/v1/products/{id}` | Eliminar producto |
+
+### Eventos (solo lectura)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/api/v1/events/` | Listar todos los eventos |
+| `GET` | `/api/v1/events/{id}` | Obtener un evento |
+| `GET` | `/api/v1/products/{id}/events/` | Eventos de un producto |
+
+### Sistema
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/` | Mensaje de bienvenida |
+| `GET` | `/health` | Health check |
 
 **Documentación interactiva:**  
 - Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)  
@@ -59,6 +79,18 @@ AssisPrexTest/
 | `stock` | `int` | Cantidad en inventario (default 0) |
 | `state` | `string` | Estado del producto (default "active") |
 | `create_at` | `datetime` | Fecha de creación (automática) |
+
+## Modelo Event
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | `int` | Identificador único (autoincremental) |
+| `product_id` | `int` | ID del producto relacionado |
+| `action` | `string` | Acción: `CREATE`, `UPDATE`, `DELETE`, `STATUS_CHANGED` |
+| `description` | `string \| null` | Descripción del evento |
+| `create_at` | `datetime` | Fecha de creación (automática) |
+
+> Los eventos se registran automáticamente al crear, actualizar o eliminar productos. Cuando se modifica el campo `state`, se genera un evento adicional `STATUS_CHANGED`.
 
 ## Instalación y ejecución
 
