@@ -10,17 +10,22 @@ AssisPrexTest/
 │   ├── main.py                  # Punto de entrada, lifespan, registro de rutas
 │   ├── core/
 │   │   ├── config.py            # Configuración con pydantic-settings
-│   │   └── database.py          # Engine, session, Base y get_db
+│   │   └── database.py          # Engine, SessionLocal, Base y get_db
 │   ├── modules/
 │   │   ├── products/
+│   │   │   ├── deps.py          # Factorías de inyección (repo, service)
 │   │   │   ├── model.py         # Modelo SQLAlchemy (Product)
+│   │   │   ├── repository.py    # Acceso a datos (ProductRepository)
 │   │   │   ├── schema.py        # Schemas Pydantic (CRUD + response)
-│   │   │   ├── service.py       # Lógica de negocio
+│   │   │   ├── service.py       # Lógica de negocio (ProductService)
 │   │   │   └── router.py        # Endpoints REST
 │   │   └── events/
+│   │       ├── deps.py          # Factorías de inyección (repo, service)
+│   │       ├── enums.py         # ActionType enum
 │   │       ├── model.py         # Modelo SQLAlchemy (Event)
+│   │       ├── repository.py    # Acceso a datos (EventRepository)
 │   │       ├── schema.py        # Schema Pydantic (EventResponse)
-│   │       ├── service.py       # Registro y consulta de eventos
+│   │       ├── service.py       # Lógica de negocio (EventService)
 │   │       └── router.py        # Endpoints REST (solo lectura)
 │   └── api/v1/
 │       └── api.py               # Router principal v1
@@ -31,6 +36,25 @@ AssisPrexTest/
 ├── .env                         # Variables de entorno
 └── requirements.txt
 ```
+
+## Arquitectura
+
+El proyecto sigue una arquitectura en capas con inyección de dependencias:
+
+```
+Router ──Depends──> Service ──Depends──> Repository ──> SQLAlchemy
+```
+
+| Capa | Responsabilidad |
+|------|----------------|
+| `router.py` | Endpoints HTTP, validación de entrada/salida |
+| `service.py` | Lógica de negocio, orquestación |
+| `repository.py` | Acceso a datos, queries SQLAlchemy |
+| `model.py` | Definición de tablas (ORM) |
+| `schema.py` | Schemas Pydantic (DTOs) |
+| `deps.py` | Factorías de inyección con `Depends` |
+
+Cada petición recorre la cadena: el router recibe el servicio ya construido con sus repositorios inyectados.
 
 ## Requisitos
 
@@ -86,11 +110,12 @@ AssisPrexTest/
 |-------|------|-------------|
 | `id` | `int` | Identificador único (autoincremental) |
 | `product_id` | `int` | ID del producto relacionado |
-| `action` | `string` | Acción: `CREATE`, `UPDATE`, `DELETE`, `STATUS_CHANGED` |
-| `description` | `string \| null` | Descripción del evento |
+| `action` | `enum` | `CREATE`, `UPDATE`, `DELETE`, `STATUS_CHANGED` |
+| `description` | `string \| null` | JSON con el DTO o datos de la acción |
 | `create_at` | `datetime` | Fecha de creación (automática) |
 
-> Los eventos se registran automáticamente al crear, actualizar o eliminar productos. Cuando se modifica el campo `state`, se genera un evento adicional `STATUS_CHANGED`.
+> Los eventos se registran automáticamente al crear, actualizar o eliminar productos.  
+> La descripción es un JSON del DTO: en `CREATE` lleva todos los campos, en `UPDATE` solo los modificados, y en `STATUS_CHANGED` el estado anterior y nuevo.
 
 ## Instalación y ejecución
 
@@ -103,7 +128,6 @@ cd AssisPrexTest
 
 # 2. (Opcional) Editar variables de entorno
 # El archivo .env ya contiene valores por defecto funcionales.
-# Si necesitas cambiarlos, edita el archivo .env antes de continuar.
 nano .env
 
 # 3. Construir y levantar los servicios
@@ -136,10 +160,9 @@ source venv/bin/activate
 # 2. Instalar dependencias
 pip install -r requirements.txt
 
-# 3. Configurar PostgreSQL
-# Asegúrate de tener PostgreSQL corriendo y edita .env:
+# 3. Configurar la base de datos
+# Define DATABASE_URL en .env apuntando a tu PostgreSQL:
 #   DATABASE_URL=postgresql://usuario:password@localhost:5432/nombre_db
-# O usa SQLite por defecto (sin cambios en .env)
 
 # 4. Ejecutar la aplicación
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -151,13 +174,14 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 | Variable | Valor por defecto | Descripción |
 |----------|-------------------|-------------|
-| `POSTGRES_USER` | `assisprex_user` | Usuario de PostgreSQL |
-| `POSTGRES_PASSWORD` | `assisprex_pass` | Contraseña de PostgreSQL |
-| `POSTGRES_DB` | `assisprex_db` | Nombre de la base de datos |
-| `DATABASE_URL` | `sqlite:///./app.db` | URL de conexión a la BD |
+| `DATABASE_URL` | *(requerido)* | URL de conexión a la BD |
+| `POSTGRES_USER` | `asisprex_user` | Usuario de PostgreSQL |
+| `POSTGRES_PASSWORD` | `asisprex_pass` | Contraseña de PostgreSQL |
+| `POSTGRES_DB` | `asisprex_db` | Nombre de la base de datos |
 | `SECRET_KEY` | `dev-secret-key...` | Clave secreta de la app |
 | `API_V1_STR` | `/api/v1` | Prefijo de la API |
 | `PROJECT_NAME` | `AssisPrexTest API` | Nombre del proyecto |
 | `APP_PORT` | `8000` | Puerto de la aplicación |
 
-> **Nota:** Al usar Docker Compose, `DATABASE_URL` se configura automáticamente para apuntar a PostgreSQL. El valor en `.env` solo se usa en desarrollo local.
+> Al usar Docker Compose, `DATABASE_URL` se inyecta automáticamente apuntando al contenedor de PostgreSQL.  
+> En desarrollo local debe definirse explícitamente en `.env`.
